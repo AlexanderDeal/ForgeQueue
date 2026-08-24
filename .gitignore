@@ -9,3 +9,5 @@ storage/results/
 storage/test-tmp/
 
 Thumbs.db
+
+*.egg-info/

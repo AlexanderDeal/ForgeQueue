@@ -1,0 +1,20 @@
+ [project]
+name = "forgequeue"
+version = "0.1.0"
+description = "A queue management toolkit for Python"
+requires-python = ">=3.14"
+dependencies = [
+	"Pillow>=12,<13",
+]
+
+[project.optional-dependencies]
+dev = [
+	"pytest>=9,<10",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["app"]
