@@ -1,8 +1,10 @@
 from pathlib import Path
 from uuid import UUID
+from datetime import datetime, timezone
 
 from app.job_store import JobStore
-from app.models import Job
+from app.models import Job, JobStatus
+from app.image_processor import create_thumbnail
 
 
 class JobNotFoundError(Exception):
@@ -24,4 +26,23 @@ class JobService:
         job = self._store.get(job_id)
         if job is None:
             raise JobNotFoundError(job_id)
+        return job
+
+    def process_job(self, job_id: UUID, output_path: Path, max_size: tuple[int, int]) -> Job:
+        job = self.get_job(job_id)
+        job.status = JobStatus.PROCESSING
+        job.updated_at = datetime.now(timezone.utc)
+
+        try:
+            create_thumbnail(input_path=job.input_path, output_path=output_path, max_size=max_size)
+            job.output_path = output_path
+            job.status = JobStatus.COMPLETED
+            job.updated_at = datetime.now(timezone.utc)
+
+        except Exception as exc:
+            job.status = JobStatus.FAILED
+            job.error = str(exc)
+            job.updated_at = datetime.now(timezone.utc)
+            raise
+
         return job
