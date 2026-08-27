@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from io import BytesIO
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from PIL import Image
@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.job_service import JobService
 from app.job_store import JobStore
-from app.main import app, get_job_service, get_upload_dir, MAX_UPLOAD_BYTES
+from app.main import app, get_job_service, get_upload_dir, get_result_dir, MAX_UPLOAD_BYTES
 
 
 client = TestClient(app)
@@ -53,7 +53,7 @@ def test_unknown_job() -> None:
 def test_valid_png(tmp_path: Path) -> None:
     image_buffer = BytesIO()
 
-    with Image.new("RGB", (1, 1), color="white") as image:
+    with Image.new("RGB", (400, 200), color="white") as image:
         image.save(image_buffer, format="PNG")
 
     image_buffer.seek(0)
@@ -62,7 +62,8 @@ def test_valid_png(tmp_path: Path) -> None:
     job_service = JobService(job_store=job_store)
 
     app.dependency_overrides[get_job_service] = lambda: job_service
-    app.dependency_overrides[get_upload_dir] = lambda: tmp_path
+    app.dependency_overrides[get_upload_dir] = lambda: tmp_path / "uploads"
+    app.dependency_overrides[get_result_dir] = lambda: tmp_path / "results"
 
     response = client.post(
         "/jobs",
@@ -80,11 +81,25 @@ def test_valid_png(tmp_path: Path) -> None:
     body = response.json()
 
     assert body["status"] == "PENDING"
+    assert body["output_path"] is None
+
+    job = job_service.get_job(UUID(body["id"]))
+    assert job.output_path is not None
+    output_path = job.output_path
+    status_response = client.get(f"/jobs/{job.id}")
+
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "COMPLETED"
 
     input_path = Path(body["input_path"])
 
     assert input_path.exists()
-    assert input_path.parent == tmp_path
+    assert input_path.parent == tmp_path / "uploads"
+    assert output_path.exists()
+    assert output_path.parent == tmp_path / "results"
+
+    with Image.open(output_path) as result_image:
+        assert result_image.size == (200, 100)
 
 
 def test_format_mismatch_returns_400(tmp_path: Path) -> None:

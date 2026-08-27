@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
 from PIL import Image, UnidentifiedImageError
 
 from app.api_models import JobResponse
@@ -29,6 +29,10 @@ def get_job_service() -> JobService:
     return job_service
 
 
+def get_result_dir() -> Path:
+    return Path("storage/results")
+
+
 def get_upload_dir() -> Path:
     return Path("storage/uploads")
 
@@ -43,6 +47,8 @@ async def create_job(
     uploaded_file: Annotated[UploadFile, File(...)],
     service: Annotated[JobService, Depends(get_job_service)],
     upload_dir: Annotated[Path, Depends(get_upload_dir)],
+    result_dir: Annotated[Path, Depends(get_result_dir)],
+    background_tasks: BackgroundTasks,
 ) -> JobResponse:
     expected_type = SUPPORTED_IMAGE_TYPES.get(uploaded_file.content_type)
     if expected_type is None:
@@ -82,6 +88,15 @@ async def create_job(
     input_path.write_bytes(contents)
 
     job = service.create_job(input_path)
+    result_dir.mkdir(parents=True, exist_ok=True)
+    output_path = result_dir / f"{job.id}{extension}"
+
+    background_tasks.add_task(
+        service.process_job,
+        job.id,
+        output_path,
+        (200, 200),
+    )
 
     return JobResponse.model_validate(job)
 
