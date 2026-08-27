@@ -4,9 +4,11 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
 from app.api_models import JobResponse
+from app.models import JobStatus
 from app.job_service import JobNotFoundError, JobService
 from app.job_store import JobStore
 
@@ -112,3 +114,21 @@ def read_job(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     return JobResponse.model_validate(job)
+
+
+@app.get("/jobs/{job_id}/result", response_class=FileResponse)
+def read_result(
+    job_id: UUID,
+    service: Annotated[JobService, Depends(get_job_service)],
+) -> FileResponse:
+    try:
+        job = service.get_job(job_id)
+        if job.status is not JobStatus.COMPLETED or job.output_path is None:
+            raise HTTPException(status_code=409, detail="Job result is not ready")
+        if not job.output_path.is_file():
+            raise HTTPException(status_code=404, detail="Result file not found",)
+
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return FileResponse(path=job.output_path, filename=job.output_path.name)
