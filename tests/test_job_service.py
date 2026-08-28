@@ -4,7 +4,7 @@ import pytest
 from PIL import Image
 
 from app.job_service import JobService, JobNotFoundError
-from app.models import JobStatus
+from app.models import JobStatus, InvalidJobTransitionError
 from app.job_store import JobStore
 
 
@@ -53,3 +53,24 @@ class TestJobService:
         assert job.error
         assert job.output_path is None
         assert job.updated_at >= job.created_at
+
+    def test_process_completed_job_rejects_transition_without_overwriting_output(
+        self, tmp_path: Path
+    ) -> None:
+        store = JobStore()
+        input_path = tmp_path / "input.png"
+        Image.new("RGB", (400, 400), color="blue").save(input_path)
+        job_service = JobService(store)
+        job = job_service.create_job(input_path)
+        output_path = tmp_path / f"{job.id}.png"
+        job_service.process_job(job.id, output_path, (200, 200))
+        original_output = output_path.read_bytes()
+
+        with pytest.raises(InvalidJobTransitionError) as exc_info:
+            job_service.process_job(job.id, output_path, (100, 100))
+
+        assert exc_info.value.current_status is JobStatus.COMPLETED
+        assert exc_info.value.requested_status is JobStatus.PROCESSING
+        assert job.status is JobStatus.COMPLETED
+        assert job.output_path == output_path
+        assert output_path.read_bytes() == original_output

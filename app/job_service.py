@@ -1,6 +1,5 @@
 from pathlib import Path
 from uuid import UUID
-from datetime import datetime, timezone
 
 from app.job_store import JobStore
 from app.models import Job, JobStatus
@@ -30,19 +29,16 @@ class JobService:
 
     def process_job(self, job_id: UUID, output_path: Path, max_size: tuple[int, int]) -> Job:
         job = self.get_job(job_id)
-        job.status = JobStatus.PROCESSING
-        job.updated_at = datetime.now(timezone.utc)
+        job.transition_to(new_status=JobStatus.PROCESSING)
 
         try:
             create_thumbnail(input_path=job.input_path, output_path=output_path, max_size=max_size)
             job.output_path = output_path
-            job.status = JobStatus.COMPLETED
-            job.updated_at = datetime.now(timezone.utc)
+            job.transition_to(new_status=JobStatus.COMPLETED)
 
         except Exception as exc:
-            job.status = JobStatus.FAILED
             job.error = str(exc)
-            job.updated_at = datetime.now(timezone.utc)
+            job.transition_to(new_status=JobStatus.FAILED)
             raise
 
         return job

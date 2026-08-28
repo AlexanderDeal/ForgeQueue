@@ -1,8 +1,8 @@
-from enum import Enum
-from uuid import UUID, uuid4
-from pathlib import Path
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from enum import Enum
+from pathlib import Path
+from uuid import UUID, uuid4
 
 
 class JobStatus(Enum):
@@ -22,3 +22,26 @@ class Job:
     output_path: Path | None = None
     error: str | None = None
 
+    def transition_to(self, new_status: JobStatus) -> None:
+        valid_transitions = {
+            JobStatus.PENDING: {JobStatus.PROCESSING},
+            JobStatus.PROCESSING: {JobStatus.COMPLETED, JobStatus.FAILED},
+            JobStatus.COMPLETED: set(),
+            JobStatus.FAILED: set(),
+        }
+
+        if new_status not in valid_transitions[self.status]:
+            raise InvalidJobTransitionError(self.status, new_status)
+
+        self.status = new_status
+        self.updated_at = datetime.now(timezone.utc)
+
+
+class InvalidJobTransitionError(Exception):
+    def __init__(self, current_status: JobStatus, requested_status: JobStatus) -> None:
+        self.current_status = current_status
+        self.requested_status = requested_status
+        super().__init__(
+            f"Invalid status transition, current status: {self.current_status}, "
+            f"requested_status: {self.requested_status}"
+        )
