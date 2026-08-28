@@ -24,7 +24,6 @@ def test_job_converts_to_job_response_with_json_compatible_dump() -> None:
     assert response.id == job_id
     assert isinstance(response.status, JobStatus)
     assert response.status is JobStatus.PENDING
-    assert response.output_path is None
     assert response.error is None
 
     dumped = response.model_dump(mode="json")
@@ -32,6 +31,6 @@ def test_job_converts_to_job_response_with_json_compatible_dump() -> None:
     assert dumped["id"] == str(job_id)
     assert dumped["status"] == JobStatus.PENDING.value
     assert dumped["created_at"] == created_at.isoformat().replace("+00:00", "Z")
-    assert dumped["input_path"] == str(job.input_path)
-    assert dumped["output_path"] is None
+    assert "input_path" not in dumped
+    assert "output_path" not in dumped
     assert dumped["error"] is None

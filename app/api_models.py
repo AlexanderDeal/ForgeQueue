@@ -1,6 +1,5 @@
-from uuid import UUID
-from pathlib import Path
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
@@ -14,6 +13,4 @@ class JobResponse(BaseModel):
     status: JobStatus
     created_at: datetime
     updated_at: datetime
-    input_path: Path
-    output_path: Path | None
     error: str | None

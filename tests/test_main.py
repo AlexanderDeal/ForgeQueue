@@ -35,6 +35,7 @@ def test_known_job(tmp_path: Path) -> None:
     input_path = tmp_path / "input.png"
     job = job_service.create_job(input_path)
 
+
     app.dependency_overrides[get_job_service] = lambda: job_service
     response = client.get(f"/jobs/{job.id}")
 
@@ -42,7 +43,8 @@ def test_known_job(tmp_path: Path) -> None:
     body = response.json()
     assert body["id"] == str(job.id)
     assert body["status"] == job.status.value
-    assert body["input_path"] == str(input_path)
+    assert "input_path" not in body
+    assert "output_path" not in body
 
 
 def test_unknown_job() -> None:
@@ -89,19 +91,19 @@ def test_valid_png(tmp_path: Path) -> None:
     assert response.status_code == 201
 
     body = response.json()
+    job = job_service.get_job(UUID(body["id"]))
+    input_path = job.input_path
 
     assert body["status"] == "PENDING"
-    assert body["output_path"] is None
+    assert "input_path" not in body
+    assert "output_path" not in body
 
-    job = job_service.get_job(UUID(body["id"]))
     assert job.output_path is not None
     output_path = job.output_path
     status_response = client.get(f"/jobs/{job.id}")
 
     assert status_response.status_code == 200
     assert status_response.json()["status"] == "COMPLETED"
-
-    input_path = Path(body["input_path"])
 
     assert input_path.exists()
     assert input_path.parent == tmp_path / "uploads"
