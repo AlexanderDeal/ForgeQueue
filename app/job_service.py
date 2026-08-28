@@ -30,15 +30,18 @@ class JobService:
     def process_job(self, job_id: UUID, output_path: Path, max_size: tuple[int, int]) -> Job:
         job = self.get_job(job_id)
         job.transition_to(new_status=JobStatus.PROCESSING)
+        self._store.update_job(job)
 
         try:
             create_thumbnail(input_path=job.input_path, output_path=output_path, max_size=max_size)
             job.output_path = output_path
             job.transition_to(new_status=JobStatus.COMPLETED)
+            self._store.update_job(job)
 
         except Exception as exc:
             job.error = str(exc)
             job.transition_to(new_status=JobStatus.FAILED)
+            self._store.update_job(job)
             raise
 
         return job

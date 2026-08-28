@@ -12,3 +12,9 @@ class JobStore:
 
     def get(self, job_id: UUID) -> Job | None:
         return self._jobs.get(job_id)
+
+    def update_job(self, job: Job) -> None:
+        if job.id in self._jobs:
+            self._jobs[job.id] = job
+        else:
+            raise KeyError(job.id)
