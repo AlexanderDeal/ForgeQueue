@@ -1,9 +1,9 @@
 from pathlib import Path
 from uuid import UUID
 
-from app.job_store import JobStore
-from app.models import Job, JobStatus
 from app.image_processor import create_thumbnail
+from app.job_store import JobStoreProtocol
+from app.models import Job, JobStatus
 
 
 class JobNotFoundError(Exception):
@@ -13,7 +13,7 @@ class JobNotFoundError(Exception):
 
 
 class JobService:
-    def __init__(self, job_store: JobStore) -> None:
+    def __init__(self, job_store: JobStoreProtocol) -> None:
         self._store = job_store
 
     def create_job(self, input_path: Path) -> Job:

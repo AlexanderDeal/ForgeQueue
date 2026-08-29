@@ -1,6 +1,19 @@
 from uuid import UUID
+from typing import Protocol
 
 from app.models import Job
+
+
+class JobStoreProtocol(Protocol):
+    def add_job(self, job: Job) -> None:
+        ...
+
+    def get(self, job_id: UUID) -> Job | None:
+        ...
+
+    def update_job(self, job: Job) -> None:
+        ...
+
 
 
 class JobStore:
