@@ -1,5 +1,5 @@
-from uuid import UUID
 from typing import Protocol
+from uuid import UUID
 
 from app.models import Job
 
@@ -13,7 +13,6 @@ class JobStoreProtocol(Protocol):
 
     def update_job(self, job: Job) -> None:
         ...
-
 
 
 class JobStore:
