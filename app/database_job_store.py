@@ -1,4 +1,8 @@
 from pathlib import Path
+from uuid import UUID
+
+from sqlalchemy import Engine
+from sqlalchemy.orm import Session
 
 from app.database_models import JobRecord
 from app.models import Job, JobStatus
@@ -26,3 +30,38 @@ def record_to_job(record: JobRecord) -> Job:
         created_at=record.created_at,
         updated_at=record.updated_at,
     )
+
+
+class DatabaseJobStore:
+    def __init__(self, engine: Engine) -> None:
+        self._engine = engine
+
+    def add_job(self, job: Job) -> None:
+        record = job_to_record(job)
+
+        with Session(self._engine) as session:
+            with session.begin():
+                session.add(record)
+
+    def get(self, job_id: UUID) -> Job | None:
+        with Session(self._engine) as session:
+            record = session.get(JobRecord, job_id)
+            if record is None:
+                return None
+            return record_to_job(record)
+
+    def update_job(self, job: Job) -> None:
+        record = job_to_record(job)
+
+        with Session(self._engine) as session:
+            with session.begin():
+                existing = session.get(JobRecord, job.id)
+                if existing is None:
+                    raise KeyError(job.id)
+
+                existing.status = record.status
+                existing.input_path = record.input_path
+                existing.output_path = record.output_path
+                existing.error = record.error
+                existing.created_at = record.created_at
+                existing.updated_at = record.updated_at
