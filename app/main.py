@@ -110,7 +110,12 @@ async def create_job(
     input_path = upload_dir / f"{uuid4()}{extension}"
     input_path.write_bytes(contents)
 
-    job = service.create_job(input_path)
+    try:
+        job = service.create_job(input_path)
+    except Exception:
+        input_path.unlink(missing_ok=True)
+        raise
+
     result_dir.mkdir(parents=True, exist_ok=True)
     output_path = result_dir / f"{job.id}{extension}"
 

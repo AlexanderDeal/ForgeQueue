@@ -292,3 +292,43 @@ def test_completed_job_with_missing_result_file(tmp_path: Path) -> None:
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Result file not found"
+
+
+def test_upload_raises_and_leaves_upload_dir_empty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    image_buffer = BytesIO()
+
+    with Image.new("RGB", (400, 200), color="white") as image:
+        image.save(image_buffer, format="PNG")
+
+    image_buffer.seek(0)
+
+    job_store = JobStore()
+    job_service = JobService(job_store=job_store)
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir()
+
+    def raise_runtime_error(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("create_job failed")
+
+    monkeypatch.setattr(job_service, "create_job", raise_runtime_error)
+
+    app.dependency_overrides[get_job_service] = lambda: job_service
+    app.dependency_overrides[get_upload_dir] = lambda: upload_dir
+
+    with pytest.raises(RuntimeError, match="create_job failed"):
+        client.post(
+            "/jobs",
+            files={
+                "uploaded_file": (
+                    "input.png",
+                    image_buffer,
+                    "image/png",
+                )
+            },
+        )
+
+    uploaded_files = list(upload_dir.iterdir())
+    assert uploaded_files == []
