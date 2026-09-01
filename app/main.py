@@ -1,16 +1,27 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID, uuid4
 
-from fastapi import BackgroundTasks, Depends, FastAPI, File, HTTPException, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
 
 from app.api_models import JobResponse
-from app.models import JobStatus
+from app.database import create_database_engine
+from app.database_job_store import DatabaseJobStore
 from app.job_service import JobNotFoundError, JobService
-from app.job_store import JobStore
+from app.models import JobStatus
 
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -21,14 +32,24 @@ SUPPORTED_IMAGE_TYPES = {
 }
 
 
-app = FastAPI(title="ForgeQueue")
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    engine = create_database_engine()
+    job_store = DatabaseJobStore(engine)
+    job_service = JobService(job_store)
+    app.state.job_service = job_service
 
-job_store = JobStore()
-job_service = JobService(job_store)
+    try:
+        yield
+    finally:
+        engine.dispose()
 
 
-def get_job_service() -> JobService:
-    return job_service
+app = FastAPI(title="ForgeQueue", lifespan=lifespan)
+
+
+def get_job_service(request: Request) -> JobService:
+    return request.app.state.job_service
 
 
 def get_result_dir() -> Path:

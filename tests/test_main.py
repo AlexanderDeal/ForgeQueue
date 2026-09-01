@@ -4,21 +4,27 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
-from PIL import Image
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.job_service import JobService
 from app.job_store import JobStore
-
-
-from app.main import app, get_job_service, get_upload_dir, get_result_dir, MAX_UPLOAD_BYTES
-
+from app.main import (
+    MAX_UPLOAD_BYTES,
+    app,
+    get_job_service,
+    get_result_dir,
+    get_upload_dir,
+)
 
 client = TestClient(app)
 
 
 @pytest.fixture(autouse=True)
-def clear_dependency_overrides() -> Generator[None, None, None]:
+def install_in_memory_job_service() -> Generator[None, None, None]:
+    job_store = JobStore()
+    job_service = JobService(job_store=job_store)
+    app.dependency_overrides[get_job_service] = lambda: job_service
     yield
     app.dependency_overrides.clear()
 
@@ -34,7 +40,6 @@ def test_known_job(tmp_path: Path) -> None:
     job_service = JobService(job_store=job_store)
     input_path = tmp_path / "input.png"
     job = job_service.create_job(input_path)
-
 
     app.dependency_overrides[get_job_service] = lambda: job_service
     response = client.get(f"/jobs/{job.id}")
