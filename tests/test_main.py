@@ -38,6 +38,12 @@ def test_read_health() -> None:
     assert response.json() == {"status": "ok"}
 
 
+def test_frontend() -> None:
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "ForgeQueue" in response.text
+
+
 def test_known_job(tmp_path: Path) -> None:
     job_store = JobStore()
     job_service = JobService(job_store=job_store)

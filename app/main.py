@@ -32,6 +32,8 @@ SUPPORTED_IMAGE_TYPES = {
     "image/jpeg": ("JPEG", ".jpg"),
 }
 
+STATIC_DIR = Path(__file__).parent / "static"
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -67,6 +69,11 @@ def get_result_dir() -> Path:
 
 def get_upload_dir() -> Path:
     return Path("storage/uploads")
+
+
+@app.get("/", response_class=FileResponse, include_in_schema=False)
+def read_frontend() -> FileResponse:
+    return FileResponse(STATIC_DIR / "index.html")
 
 
 @app.get("/health")

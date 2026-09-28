@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ForgeQueue</title>
+  <style>
+    :root { color-scheme: dark; --bg:#090d14; --panel:#111827; --line:#243044; --text:#edf3ff; --muted:#91a0b8; --accent:#ff8a3d; --accent2:#58d6c7; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:Inter,ui-sans-serif,system-ui,sans-serif; background:radial-gradient(circle at 15% 0%,#1c293c 0,transparent 35%),var(--bg); color:var(--text); }
+    main { width:min(1050px,calc(100% - 32px)); margin:0 auto; padding:64px 0; }
+    header { display:flex; justify-content:space-between; gap:24px; align-items:end; margin-bottom:34px; }
+    .eyebrow { color:var(--accent2); font:700 12px/1 monospace; letter-spacing:.16em; text-transform:uppercase; }
+    h1 { margin:10px 0 8px; font-size:clamp(42px,8vw,78px); line-height:.9; letter-spacing:-.06em; }
+    .lede { color:var(--muted); max-width:610px; font-size:17px; line-height:1.6; }
+    .docs { color:var(--text); text-decoration:none; border:1px solid var(--line); padding:10px 14px; border-radius:10px; white-space:nowrap; }
+    .grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,.8fr); gap:20px; }
+    .card { background:rgba(17,24,39,.86); border:1px solid var(--line); border-radius:18px; padding:24px; box-shadow:0 20px 60px rgba(0,0,0,.22); }
+    h2 { margin:0 0 18px; font-size:18px; }
+    .drop { display:grid; place-items:center; min-height:260px; border:1px dashed #42516a; border-radius:14px; text-align:center; padding:28px; transition:.2s; }
+    .drop.drag { border-color:var(--accent); background:#ff8a3d0d; }
+    input[type=file] { display:none; }
+    button,.pick { border:0; border-radius:10px; padding:12px 17px; background:var(--accent); color:#1a0d04; font-weight:800; cursor:pointer; display:inline-block; }
+    button:disabled { opacity:.5; cursor:wait; }
+    .filename { color:var(--muted); margin:14px 0 20px; min-height:24px; }
+    .pipeline { display:flex; flex-wrap:wrap; gap:8px; color:var(--muted); font:12px monospace; }
+    .pipeline span { padding:7px 9px; border:1px solid var(--line); border-radius:999px; }
+    #jobs { display:grid; gap:10px; max-height:470px; overflow:auto; }
+    .empty { color:var(--muted); padding:30px 0; text-align:center; }
+    .job { border:1px solid var(--line); border-radius:12px; padding:14px; }
+    .jobtop { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+    .id { font:12px monospace; color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
+    .status { font:800 11px monospace; letter-spacing:.05em; padding:6px 8px; border-radius:999px; background:#263246; }
+    .COMPLETED { color:#74edc2; background:#123b32; }
+    .FAILED { color:#ff8f91; background:#481f27; }
+    .PROCESSING,.RETRYING { color:#ffd27c; background:#473719; }
+    .job a { display:inline-block; margin-top:12px; color:var(--accent2); }
+    .error { margin-top:12px; color:#ff8f91; font-size:13px; }
+    @media(max-width:760px){ header{align-items:start;flex-direction:column}.grid{grid-template-columns:1fr}main{padding:38px 0} }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div><div class="eyebrow">Distributed media processing</div><h1>ForgeQueue</h1><div class="lede">Upload an image. The API records it in PostgreSQL, Redis dispatches it, and an independent worker forges the thumbnail.</div></div>
+    <a class="docs" href="/docs">API docs ↗</a>
+  </header>
+  <section class="grid">
+    <div class="card">
+      <h2>Submit a job</h2>
+      <div class="drop" id="drop">
+        <div>
+          <label class="pick" for="file">Choose PNG or JPEG</label>
+          <input id="file" type="file" accept="image/png,image/jpeg">
+          <div class="filename" id="filename">or drop an image here · max 5 MB</div>
+          <button id="submit" disabled>Send to queue</button>
+        </div>
+      </div>
+      <div class="pipeline" style="margin-top:18px"><span>API</span><span>PostgreSQL</span><span>Redis Stream</span><span>Worker pool</span></div>
+    </div>
+    <div class="card">
+      <h2>Recent jobs</h2>
+      <div id="jobs"><div class="empty">No jobs submitted in this browser.</div></div>
+    </div>
+  </section>
+</main>
+<script>
+  const fileInput=document.querySelector('#file'), submit=document.querySelector('#submit'), filename=document.querySelector('#filename'), jobsEl=document.querySelector('#jobs'), drop=document.querySelector('#drop');
+  let selected=null, jobs=JSON.parse(localStorage.getItem('forgequeue-jobs')||'[]');
+  function save(){ localStorage.setItem('forgequeue-jobs',JSON.stringify(jobs.slice(0,20))); }
+  function choose(file){ selected=file; filename.textContent=file?`${file.name} · ${(file.size/1024/1024).toFixed(2)} MB`:'or drop an image here · max 5 MB'; submit.disabled=!file; }
+  fileInput.onchange=()=>choose(fileInput.files[0]);
+  for(const event of ['dragenter','dragover']) drop.addEventListener(event,e=>{e.preventDefault();drop.classList.add('drag')});
+  for(const event of ['dragleave','drop']) drop.addEventListener(event,e=>{e.preventDefault();drop.classList.remove('drag')});
+  drop.addEventListener('drop',e=>choose(e.dataTransfer.files[0]));
+  function render(){ jobsEl.innerHTML=jobs.length?'':'<div class="empty">No jobs submitted in this browser.</div>'; for(const job of jobs){ const node=document.createElement('div'); node.className='job'; node.innerHTML=`<div class="jobtop"><div class="id" title="${job.id}">${job.id}</div><div class="status ${job.status}">${job.status}</div></div>${job.status==='COMPLETED'?`<a href="/jobs/${job.id}/result" target="_blank">Open result ↗</a>`:''}${job.error?`<div class="error">${job.error}</div>`:''}`; jobsEl.append(node); } }
+  async function refresh(){ await Promise.all(jobs.filter(j=>!['COMPLETED','FAILED'].includes(j.status)).map(async job=>{ try{ const r=await fetch(`/jobs/${job.id}`); if(r.ok) Object.assign(job,await r.json()); }catch{} })); save(); render(); }
+  submit.onclick=async()=>{ if(!selected)return; submit.disabled=true; submit.textContent='Uploading…'; const data=new FormData(); data.append('uploaded_file',selected); try{ const r=await fetch('/jobs',{method:'POST',body:data}); const body=await r.json(); if(!r.ok) throw new Error(body.detail||'Upload failed'); jobs.unshift(body); save(); render(); choose(null); fileInput.value=''; }catch(e){ alert(e.message); }finally{ submit.textContent='Send to queue'; submit.disabled=!selected; } };
+  render(); refresh(); setInterval(refresh,750);
+</script>
+</body>
+</html>
