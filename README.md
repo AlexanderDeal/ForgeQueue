@@ -67,7 +67,7 @@ python -m app.worker
 
 ```powershell
 python -m pytest
-python scripts/benchmark.py sample.png --requests 100 --concurrency 20
+python scripts/benchmark.py sample.png --workers 2 --requests 100 --concurrency 20
 ```
 
 Benchmark API submission latency separately from end-to-end processing time.
