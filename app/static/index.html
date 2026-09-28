@@ -29,7 +29,8 @@
     .empty { color:var(--muted); padding:30px 0; text-align:center; }
     .job { border:1px solid var(--line); border-radius:12px; padding:14px; }
     .jobtop { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-    .id { font:12px monospace; color:var(--muted); overflow:hidden; text-overflow:ellipsis; }
+    .jobname { font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .meta { margin-top:5px; font:11px monospace; color:var(--muted); }
     .status { font:800 11px monospace; letter-spacing:.05em; padding:6px 8px; border-radius:999px; background:#263246; }
     .COMPLETED { color:#74edc2; background:#123b32; }
     .FAILED { color:#ff8f91; background:#481f27; }
@@ -73,9 +74,10 @@
   for(const event of ['dragenter','dragover']) drop.addEventListener(event,e=>{e.preventDefault();drop.classList.add('drag')});
   for(const event of ['dragleave','drop']) drop.addEventListener(event,e=>{e.preventDefault();drop.classList.remove('drag')});
   drop.addEventListener('drop',e=>choose(e.dataTransfer.files[0]));
-  function render(){ jobsEl.innerHTML=jobs.length?'':'<div class="empty">No jobs submitted in this browser.</div>'; for(const job of jobs){ const node=document.createElement('div'); node.className='job'; node.innerHTML=`<div class="jobtop"><div class="id" title="${job.id}">${job.id}</div><div class="status ${job.status}">${job.status}</div></div>${job.status==='COMPLETED'?`<a href="/jobs/${job.id}/result" target="_blank">Open result ↗</a>`:''}${job.error?`<div class="error">${job.error}</div>`:''}`; jobsEl.append(node); } }
+  function escapeHtml(value){ const node=document.createElement('span'); node.textContent=String(value); return node.innerHTML; }
+  function render(){ jobsEl.innerHTML=jobs.length?'':'<div class="empty">No jobs submitted in this browser.</div>'; for(const job of jobs){ const node=document.createElement('div'); node.className='job'; const label=job.filename||`Image job ${job.id.slice(0,8)}`; const submitted=job.submittedAt?new Date(job.submittedAt).toLocaleString():'Earlier session'; node.innerHTML=`<div class="jobtop"><div style="min-width:0"><div class="jobname" title="${escapeHtml(label)}">${escapeHtml(label)}</div><div class="meta" title="${job.id}">${job.id.slice(0,8)} · ${escapeHtml(submitted)}</div></div><div class="status ${job.status}">${job.status}</div></div>${job.status==='COMPLETED'?`<a href="/jobs/${job.id}/result" target="_blank">Open result ↗</a>`:''}${job.error?`<div class="error">${escapeHtml(job.error)}</div>`:''}`; jobsEl.append(node); } }
   async function refresh(){ await Promise.all(jobs.filter(j=>!['COMPLETED','FAILED'].includes(j.status)).map(async job=>{ try{ const r=await fetch(`/jobs/${job.id}`); if(r.ok) Object.assign(job,await r.json()); }catch{} })); save(); render(); }
-  submit.onclick=async()=>{ if(!selected)return; submit.disabled=true; submit.textContent='Uploading…'; const data=new FormData(); data.append('uploaded_file',selected); try{ const r=await fetch('/jobs',{method:'POST',body:data}); const body=await r.json(); if(!r.ok) throw new Error(body.detail||'Upload failed'); jobs.unshift(body); save(); render(); choose(null); fileInput.value=''; }catch(e){ alert(e.message); }finally{ submit.textContent='Send to queue'; submit.disabled=!selected; } };
+  submit.onclick=async()=>{ if(!selected)return; submit.disabled=true; submit.textContent='Uploading…'; const originalName=selected.name; const data=new FormData(); data.append('uploaded_file',selected); try{ const r=await fetch('/jobs',{method:'POST',body:data}); const body=await r.json(); if(!r.ok) throw new Error(body.detail||'Upload failed'); jobs.unshift({...body,filename:originalName,submittedAt:new Date().toISOString()}); save(); render(); choose(null); fileInput.value=''; }catch(e){ alert(e.message); }finally{ submit.textContent='Send to queue'; submit.disabled=!selected; } };
   render(); refresh(); setInterval(refresh,750);
 </script>
 </body>
