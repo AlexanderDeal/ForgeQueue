@@ -14,7 +14,8 @@ class JobRecord(Base):
 
     __table_args__ = (
         CheckConstraint(
-            "status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED')",
+            "status IN ('PENDING', 'QUEUED', 'PROCESSING', 'COMPLETED', "
+            "'FAILED', 'RETRYING')",
             name="ck_jobs_status",
         ),
     )

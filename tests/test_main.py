@@ -8,11 +8,13 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.job_service import JobService
+from app.job_queue import InMemoryJobQueue
 from app.job_store import JobStore
 from app.main import (
     MAX_UPLOAD_BYTES,
     app,
     get_job_service,
+    get_job_queue,
     get_result_dir,
     get_upload_dir,
 )
@@ -25,6 +27,7 @@ def install_in_memory_job_service() -> Generator[None, None, None]:
     job_store = JobStore()
     job_service = JobService(job_store=job_store)
     app.dependency_overrides[get_job_service] = lambda: job_service
+    app.dependency_overrides[get_job_queue] = InMemoryJobQueue
     yield
     app.dependency_overrides.clear()
 
@@ -77,8 +80,10 @@ def test_valid_png(tmp_path: Path) -> None:
 
     job_store = JobStore()
     job_service = JobService(job_store=job_store)
+    job_queue = InMemoryJobQueue()
 
     app.dependency_overrides[get_job_service] = lambda: job_service
+    app.dependency_overrides[get_job_queue] = lambda: job_queue
     app.dependency_overrides[get_upload_dir] = lambda: tmp_path / "uploads"
     app.dependency_overrides[get_result_dir] = lambda: tmp_path / "results"
 
@@ -99,24 +104,20 @@ def test_valid_png(tmp_path: Path) -> None:
     job = job_service.get_job(UUID(body["id"]))
     input_path = job.input_path
 
-    assert body["status"] == "PENDING"
+    assert body["status"] == "QUEUED"
     assert "input_path" not in body
     assert "output_path" not in body
 
-    assert job.output_path is not None
-    output_path = job.output_path
+    assert job.output_path is None
+    assert len(job_queue.messages) == 1
+    assert job_queue.messages[0].job_id == job.id
     status_response = client.get(f"/jobs/{job.id}")
 
     assert status_response.status_code == 200
-    assert status_response.json()["status"] == "COMPLETED"
+    assert status_response.json()["status"] == "QUEUED"
 
     assert input_path.exists()
     assert input_path.parent == tmp_path / "uploads"
-    assert output_path.exists()
-    assert output_path.parent == tmp_path / "results"
-
-    with Image.open(output_path) as result_image:
-        assert result_image.size == (200, 100)
 
 
 def test_format_mismatch_returns_400(tmp_path: Path) -> None:

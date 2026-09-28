@@ -27,6 +27,27 @@ class JobService:
             raise JobNotFoundError(job_id)
         return job
 
+    def queue_job(self, job_id: UUID) -> Job:
+        job = self.get_job(job_id)
+        job.transition_to(JobStatus.QUEUED)
+        self._store.update_job(job)
+        return job
+
+    def fail_queued_job(self, job_id: UUID, error: str) -> Job:
+        job = self.get_job(job_id)
+        job.error = error
+        job.transition_to(JobStatus.FAILED)
+        self._store.update_job(job)
+        return job
+
+    def retry_job(self, job_id: UUID) -> Job:
+        job = self.get_job(job_id)
+        job.transition_to(JobStatus.RETRYING)
+        self._store.update_job(job)
+        job.transition_to(JobStatus.QUEUED)
+        self._store.update_job(job)
+        return job
+
     def process_job(self, job_id: UUID, output_path: Path, max_size: tuple[int, int]) -> Job:
         job = self.get_job(job_id)
         job.transition_to(new_status=JobStatus.PROCESSING)

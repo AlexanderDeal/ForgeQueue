@@ -8,12 +8,15 @@ dependencies = [
 	"fastapi[standard-no-fastapi-cloud-cli]>=0.141,<0.142",
 	"SQLAlchemy>=2.0.52,<2.1",
 	"psycopg[binary]>=3.3,<4",
+	"redis>=6,<7",
+	"boto3>=1.40,<2",
 ]
 
 [project.optional-dependencies]
 dev = [
 	"pytest>=9,<10",
 	"alembic>=1.19,<2",
+	"httpx>=0.28,<1",
 ]
 
 [build-system]

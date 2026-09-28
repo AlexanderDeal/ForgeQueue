@@ -6,7 +6,6 @@ from typing import Annotated
 from uuid import UUID, uuid4
 
 from fastapi import (
-    BackgroundTasks,
     Depends,
     FastAPI,
     File,
@@ -21,7 +20,9 @@ from app.api_models import JobResponse
 from app.database import create_database_engine
 from app.database_job_store import DatabaseJobStore
 from app.job_service import JobNotFoundError, JobService
+from app.job_queue import JobQueueProtocol, RedisJobQueue
 from app.models import JobStatus
+from app.redis_client import create_redis_client
 
 
 MAX_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -37,11 +38,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = create_database_engine()
     job_store = DatabaseJobStore(engine)
     job_service = JobService(job_store)
+    redis_client = create_redis_client()
+    job_queue = RedisJobQueue(redis_client)
     app.state.job_service = job_service
+    app.state.job_queue = job_queue
 
     try:
         yield
     finally:
+        redis_client.close()
         engine.dispose()
 
 
@@ -50,6 +55,10 @@ app = FastAPI(title="ForgeQueue", lifespan=lifespan)
 
 def get_job_service(request: Request) -> JobService:
     return request.app.state.job_service
+
+
+def get_job_queue(request: Request) -> JobQueueProtocol:
+    return request.app.state.job_queue
 
 
 def get_result_dir() -> Path:
@@ -71,7 +80,7 @@ async def create_job(
     service: Annotated[JobService, Depends(get_job_service)],
     upload_dir: Annotated[Path, Depends(get_upload_dir)],
     result_dir: Annotated[Path, Depends(get_result_dir)],
-    background_tasks: BackgroundTasks,
+    queue: Annotated[JobQueueProtocol, Depends(get_job_queue)],
 ) -> JobResponse:
     expected_type = SUPPORTED_IMAGE_TYPES.get(uploaded_file.content_type)
     if expected_type is None:
@@ -117,14 +126,13 @@ async def create_job(
         raise
 
     result_dir.mkdir(parents=True, exist_ok=True)
-    output_path = result_dir / f"{job.id}{extension}"
-
-    background_tasks.add_task(
-        service.process_job,
-        job.id,
-        output_path,
-        (200, 200),
-    )
+    service.queue_job(job.id)
+    try:
+        queue.enqueue(job.id)
+    except Exception as exc:
+        service.fail_queued_job(job.id, str(exc))
+        input_path.unlink(missing_ok=True)
+        raise
 
     return JobResponse.model_validate(job)
 

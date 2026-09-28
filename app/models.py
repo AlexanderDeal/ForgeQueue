@@ -7,9 +7,11 @@ from uuid import UUID, uuid4
 
 class JobStatus(Enum):
     PENDING = "PENDING"
+    QUEUED = "QUEUED"
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    RETRYING = "RETRYING"
 
     
 @dataclass
@@ -24,10 +26,16 @@ class Job:
 
     def transition_to(self, new_status: JobStatus) -> None:
         valid_transitions = {
-            JobStatus.PENDING: {JobStatus.PROCESSING},
-            JobStatus.PROCESSING: {JobStatus.COMPLETED, JobStatus.FAILED},
+            JobStatus.PENDING: {JobStatus.QUEUED, JobStatus.PROCESSING},
+            JobStatus.QUEUED: {JobStatus.PROCESSING, JobStatus.FAILED},
+            JobStatus.PROCESSING: {
+                JobStatus.COMPLETED,
+                JobStatus.FAILED,
+                JobStatus.RETRYING,
+            },
+            JobStatus.RETRYING: {JobStatus.QUEUED, JobStatus.FAILED},
             JobStatus.COMPLETED: set(),
-            JobStatus.FAILED: set(),
+            JobStatus.FAILED: {JobStatus.RETRYING},
         }
 
         if new_status not in valid_transitions[self.status]:
